@@ -77,12 +77,12 @@ _C.TRAIN.ACCUMULATION_STEPS = 0
 _C.TRAIN.USE_CHECKPOINT = False
 _C.TRAIN.CLS_LOSS = 'smoothCE'
 _C.TRAIN.FCN_LOSS = 'dice'
-_C.TRAIN.REG_LOSS = 'mse'
+_C.TRAIN.REG_LOSS = 'l1'
 _C.TRAIN.LOSS_RATIOS = CN()
-_C.TRAIN.LOSS_RATIOS.SEG = 1
-_C.TRAIN.LOSS_RATIOS.CLS = 1
+_C.TRAIN.LOSS_RATIOS.SEG = 0.1
+_C.TRAIN.LOSS_RATIOS.CLS = 10
 _C.TRAIN.LOSS_RATIOS.REG = 1
-_C.TRAIN.LOSS_RATIOS.FIN = 1
+_C.TRAIN.LOSS_RATIOS.FIN = 0.5
 
 # LR scheduler
 _C.TRAIN.LR_SCHEDULER = CN()
@@ -188,6 +188,8 @@ def update_config(config, args):
         config.DATA.BATCH_SIZE = args.batch_size
     if args.data_path:
         config.DATA.DATA_PATH = args.data_path
+    if args.lr:
+        config.TRAIN.BASE_LR = args.lr
     config.freeze()
 
 

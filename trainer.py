@@ -49,6 +49,7 @@ class Trainer():
         parser.add_argument("--opts",type=str,default=None,nargs="+",required=False)
         parser.add_argument("--batch_size",type=int,default=128,required=False)
         parser.add_argument("--data_path",type=str,default="./",required=False)
+        parser.add_argument("--lr",type=float,default=5e-4,required=False)
         return parser.parse_args()
 
     def make_dataset(self):
@@ -66,12 +67,20 @@ class Trainer():
         self.trainloader = DataLoader(dataset=trainset,batch_size=self.config.DATA.BATCH_SIZE,shuffle=True,num_workers=self.config.DATA.NUM_WORKERS,pin_memory=True)
         self.evalloader  = DataLoader(dataset=evalset,batch_size=self.config.DATA.BATCH_SIZE,shuffle=False,num_workers=self.config.DATA.NUM_WORKERS,pin_memory=True)
         self.testloader  = DataLoader(dataset=testset,batch_size=self.config.DATA.BATCH_SIZE,shuffle=False,num_workers=self.config.DATA.NUM_WORKERS,pin_memory=True)
+        self.n_iter_per_epoch = len(self.trainloader)
 
     def make_model(self,):
         self.model = UltraModel(1,self.config.MODEL.NUM_CLASSES,4).cuda()
+        # self.optimizer = torch.optim.Adam(self.model.parameters(),lr=self.config.TRAIN.BASE_LR)
+        # self.lr_scheduler = build_scheduler(self.config,self.optimizer,len(self.trainloader))
+        self.optimizer = torch.optim.Adam([{'params':self.model.encoder.parameters(),'lr':5e-6},
+            {'params':self.model.decoder.parameters(),'lr':1e-3},
+            {'params':self.model.segmentation_head.parameters(),'lr':1e-3},
+            {'params':self.model.yawHead.parameters(),'lr':self.config.TRAIN.BASE_LR},
+            {'params':self.model.pitchHead.parameters(),'lr':self.config.TRAIN.BASE_LR},
+            {'params':self.model.rollHead.parameters(),'lr':self.config.TRAIN.BASE_LR},
+            {'params':self.model.fingerHead.parameters(),'lr':self.config.TRAIN.BASE_LR}],lr=self.config.TRAIN.BASE_LR)
         self.model = nn.DataParallel(self.model,list(range(0,len(os.environ["CUDA_VISIBLE_DEVICES"].split(',')))))
-        self.optimizer = torch.optim.Adam(self.model.parameters(),lr=self.config.TRAIN.BASE_LR)
-        self.lr_scheduler = build_scheduler(self.config,self.optimizer,len(self.trainloader))
         if self.config.TRAIN.CLS_LOSS=="focal":
             self.cls_criterion = FocalLoss(gamma=2.0).cuda()
         elif self.config.TRAIN.CLS_LOSS=="ce":
@@ -117,9 +126,9 @@ class Trainer():
             avg_loss = self.train(epoch)
             eval_error = self.evaluate(epoch,"validation",self.evalloader)
             if epoch % 10==0:
-                save_model(self.model.module,self.optimizer,self.lr_scheduler,epoch,eval_error,os.path.join(self.config.TRAIN.SAVE_DIR,f'{epoch}.pth.tar'))
+                save_model(self.model.module,self.optimizer,None,epoch,eval_error,os.path.join(self.config.TRAIN.SAVE_DIR,f'{epoch}.pth.tar'))
             if eval_error<best_error:
-                save_model(self.model.module,self.optimizer,self.lr_scheduler,epoch,eval_error,os.path.join(self.config.TRAIN.SAVE_DIR,"best.pth.tar"))
+                save_model(self.model.module,self.optimizer,None,epoch,eval_error,os.path.join(self.config.TRAIN.SAVE_DIR,"best.pth.tar"))
                 best_error = eval_error
 
         self.evaluate(self.config.TRAIN.EPOCHS,"test",self.testloader)
@@ -194,16 +203,21 @@ class Trainer():
             finger_loss_scalar.update(loss_finger.item(),bb)
             fcn_loss_scalar.update(loss_fcn.item(),bb)
 
-            self.writer.add_scalars("train_loss",{"loss_all":loss_scalar.val,\
-                                                   "loss_cls":cls_loss_scalar.val,\
-                                                   "loss_reg":reg_loss_scalar.val,\
-                                                   "loss_finger":finger_loss_scalar.val,\
-                                                   "loss_seg":fcn_loss_scalar.val})
+            self.writer.add_scalar("train_loss_all",loss_scalar.val,epoch*self.n_iter_per_epoch+iterx)
+            self.writer.add_scalar("train_loss_cls",cls_loss_scalar.val,epoch*self.n_iter_per_epoch+iterx)
+            self.writer.add_scalar("train_loss_reg",reg_loss_scalar.val,epoch*self.n_iter_per_epoch+iterx)
+            self.writer.add_scalar("train_loss_finger",finger_loss_scalar.val,epoch*self.n_iter_per_epoch+iterx)
+            self.writer.add_scalar("train_loss_seg",fcn_loss_scalar.val,epoch*self.n_iter_per_epoch+iterx)
 
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()
 
+        self.writer.add_scalar("epoch_loss_all",loss_scalar.avg,epoch)
+        self.writer.add_scalar("epoch_loss_cls",cls_loss_scalar.avg,epoch)
+        self.writer.add_scalar("epoch_loss_reg",reg_loss_scalar.avg,epoch)
+        self.writer.add_scalar("epoch_loss_finger",finger_loss_scalar.avg,epoch)
+        self.writer.add_scalar("epoch_loss_seg",fcn_loss_scalar.avg,epoch)
         return loss_scalar.avg
 
     def evaluate(self,epoch,context,dataloader):
@@ -275,11 +289,11 @@ class Trainer():
                 print(f"Eval Evil: {iterx}/{len(dataloader)}||{epoch} ",string_for_loss(["yaw","pitch","roll","finger","seg"],
                                                      [yaw_error,pitch_error,roll_error,finger_right,seg_dice]))
         print(f"Average eval error: {yaw_error_scalar.avg:4f},{pitch_error_scalar.avg:4f},{roll_error_scalar.avg:4f}")
-        self.writer.add_scalars("validataion_metric",{"yaw_error":yaw_error_scalar.avg,\
-                                           "pitch_error":pitch_error_scalar.avg,\
-                                           "roll_error":roll_error_scalar.avg,\
-                                           "finger_acc":finger_acc_scalar.avg,\
-                                           "seg_dice":seg_dice_scalar.avg})
+        self.writer.add_scalar("eval_yaw_error",yaw_error_scalar.avg,epoch)
+        self.writer.add_scalar("eval_pitch_error",pitch_error_scalar.avg,epoch)
+        self.writer.add_scalar("eval_roll_error",roll_error_scalar.avg,epoch)
+        self.writer.add_scalar("eval_finger_acc",finger_acc_scalar.avg,epoch)
+        self.writer.add_scalar("eval_seg_dice",seg_dice_scalar.avg,epoch)
         return (yaw_error_scalar.avg+pitch_error_scalar.avg+roll_error_scalar.avg)/3.0
 
 def get_frozen_parameters(model):

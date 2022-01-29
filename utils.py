@@ -108,7 +108,10 @@ def save_model(model,optim,lr_scheduler,epoch,eval_error,path):
         model_state = model.module.state_dict()
     else:
         model_state = model.state_dict()
-    torch.save({"model":model_state,"optim":optim.state_dict(),"lr_scheduler":lr_scheduler.state_dict(),"epoch":epoch,"eval_error":eval_error},path)
+    if lr_scheduler is None:
+        torch.save({"model":model_state,"optim":optim.state_dict(),"epoch":epoch,"eval_error":eval_error},path)
+    else:
+        torch.save({"model":model_state,"optim":optim.state_dict(),"lr_scheduler":lr_scheduler.state_dict(),"epoch":epoch,"eval_error":eval_error},path)
 
 def load_model(model,ckp_path):
     def remove_module_string(k):
