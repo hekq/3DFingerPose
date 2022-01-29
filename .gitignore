@@ -1,0 +1,8 @@
+pkls
+images
+segmentations
+poses
+debug.py
+runs
+models
+__pycache__
