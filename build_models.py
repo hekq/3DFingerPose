@@ -9,14 +9,8 @@ class ClassificationHead(nn.Sequential):
         pool = nn.AdaptiveAvgPool2d(1) if pooling == 'avg' else nn.AdaptiveMaxPool2d(1)
         flatten = nn.Flatten()
         dropout = nn.Dropout(p=dropout, inplace=True) if dropout else nn.Identity()
-        linear1 = nn.Linear(in_channels, int(in_channels//4), bias=True)
-        activation1 = smp.base.modules.Activation(activation)
-
-        linear2 = nn.Linear(int(in_channels//4), int(in_channels//16), bias=True)
-        activation2 = smp.base.modules.Activation(activation)
-
-        linear3 = nn.Linear(int(in_channels//16), classes, bias=True)
-        super().__init__(pool, flatten, dropout, linear1, activation1, linear2, activation2, linear3)
+        linear1 = nn.Linear(in_channels, classes, bias=True)
+        super().__init__(pool, flatten, dropout, linear1)
 
 class modulate_block(nn.Sequential):
     def __init__(self,in_c,out_c):
@@ -32,7 +26,7 @@ class UltraModel(nn.Module):
     def __init__(self,in_c,pose_c,finger_c,fcn_c=1):
         super(UltraModel,self).__init__()
         self.base = smp.Unet(
-                encoder_name="mobilenet_v2",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+                encoder_name="resnet18",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
                 encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
                 in_channels=in_c,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
                 classes=fcn_c,                      # model output channels (number of classes in your dataset)
@@ -159,10 +153,8 @@ class Discriminator(nn.Module):
 if __name__ == "__main__":
     dev = torch.device("cuda:0")
     input = torch.randn(4,1,64,64).to(dev)
-    m = UltraModel(1,1).to(dev)
-    pose = m(input)['pose']
-    seg = m(input)['fcn_out']
-    print(pose.shape)
-    print(seg.min(),seg.max(),seg.shape)
-    from utils import count_parameters
-    print(count_parameters(m))
+    m = UltraModel(1,[30,30,30],4).to(dev)
+    pose = m(input)['yaw']
+    seg = m(input)['fcn']
+    for name,module in m.named_modules():
+        print(name)
