@@ -12,16 +12,15 @@ from dataset import fingerset
 from utils import averageScalar,string_for_loss
 from utils import dice as Dice_coef
 from yacs.config import CfgNode as CN
+import sys
 
-run = '2022-01-30-01-48-09'
-with open(os.path.join('./runs',run,'config.yaml'),'r') as f:
+with open('./config.yaml','r') as f:
     config = CN(yaml.safe_load(f))
 
 model = UltraModel(1,config.MODEL.NUM_CLASSES,2,config.MODEL.BACKBONE).cuda()
-best_ckp = torch.load(os.path.join('./models',run,'best.pth.tar'),map_location=lambda storage,_:storage)
+best_ckp = torch.load('./best.pth.tar',map_location=lambda storage,_:storage)
 model.load_state_dict(best_ckp["model"])
 model.eval()
-
 
 testset  = fingerset('./pkls/test.pkl', 'test', [64,64],2, config.DATA.NORMALIZATION)
 dataloader = DataLoader(testset,128,False,num_workers=8)
