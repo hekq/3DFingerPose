@@ -12,7 +12,8 @@ from timm.scheduler.scheduler import Scheduler
 
 
 def build_scheduler(config, optimizer, n_iter_per_epoch):
-    num_steps = int(config.TRAIN.EPOCHS * n_iter_per_epoch)
+    # num_steps = int(config.TRAIN.EPOCHS * n_iter_per_epoch)
+    num_steps = 20 * n_iter_per_epoch
     warmup_steps = int(config.TRAIN.WARMUP_EPOCHS * n_iter_per_epoch)
     decay_steps = int(config.TRAIN.LR_SCHEDULER.DECAY_EPOCHS * n_iter_per_epoch)
 
@@ -25,7 +26,7 @@ def build_scheduler(config, optimizer, n_iter_per_epoch):
             lr_min=config.TRAIN.MIN_LR,
             warmup_lr_init=config.TRAIN.WARMUP_LR,
             warmup_t=warmup_steps,
-            cycle_limit=1,
+            cycle_limit=0,
             t_in_epochs=False,
         )
     elif config.TRAIN.LR_SCHEDULER.NAME == 'linear':

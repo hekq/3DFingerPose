@@ -39,23 +39,23 @@ class Trainer():
         self.make_model()
         self.interval_tensors()
         now = datetime.now()
-        prefix = now.strftime("%Y-%m-%d-%H-%M-%S")
-        self.writer = SummaryWriter(f'./runs/{prefix}')
+        self.prefix = now.strftime("%Y-%m-%d-%H-%M-%S")
+        os.makedirs(os.path.join('./models',self.prefix),exist_ok=True)
+        os.makedirs(os.path.join('./runs',self.prefix),exist_ok=True)
+        with open(os.path.join('./runs',self.prefix,'config.yaml'),"w") as f:
+            self.config.dump(stream=f)
+        self.writer = SummaryWriter(f'./runs/{self.prefix}')
 
     def parse_args(self,):
         parser = ArgumentParser()
-        # parser.add_argument("data_path",type=str,default="./")
-        parser.add_argument("--cfg",type=str,default=None)
+        parser.add_argument("--cfg",type=str,default='',required=True)
         parser.add_argument("--opts",type=str,default=None,nargs="+",required=False)
-        parser.add_argument("--batch_size",type=int,default=128,required=False)
-        parser.add_argument("--data_path",type=str,default="./",required=False)
-        parser.add_argument("--lr",type=float,default=5e-4,required=False)
         return parser.parse_args()
 
     def make_dataset(self):
-        trainset = fingerset('./pkls/train.pkl','train',[64,64],4,self.config.DATA.NORMALIZATION)
-        evalset  = fingerset('./pkls/eval.pkl', 'eval', [64,64],4,self.config.DATA.NORMALIZATION)
-        testset  = fingerset('./pkls/test.pkl', 'test', [64,64],4,self.config.DATA.NORMALIZATION)
+        trainset = fingerset('./pkls/train.pkl','train',[64,64],2,self.config.DATA.NORMALIZATION)
+        evalset  = fingerset('./pkls/eval.pkl', 'eval', [64,64],2,self.config.DATA.NORMALIZATION)
+        testset  = fingerset('./pkls/test.pkl', 'test', [64,64],2,self.config.DATA.NORMALIZATION)
         # TODO
         debug = False
         if debug:
@@ -70,9 +70,8 @@ class Trainer():
         self.n_iter_per_epoch = len(self.trainloader)
 
     def make_model(self,):
-        self.model = UltraModel(1,self.config.MODEL.NUM_CLASSES,4).cuda()
+        self.model = UltraModel(1,self.config.MODEL.NUM_CLASSES,2,self.config.MODEL.BACKBONE).cuda()
         # self.optimizer = torch.optim.Adam(self.model.parameters(),lr=self.config.TRAIN.BASE_LR)
-        # self.lr_scheduler = build_scheduler(self.config,self.optimizer,len(self.trainloader))
         self.optimizer = torch.optim.Adam([{'params':self.model.encoder.parameters(),'lr':5e-6},
             {'params':self.model.decoder.parameters(),'lr':1e-3},
             {'params':self.model.segmentation_head.parameters(),'lr':1e-3},
@@ -80,6 +79,7 @@ class Trainer():
             {'params':self.model.pitchHead.parameters(),'lr':self.config.TRAIN.BASE_LR},
             {'params':self.model.rollHead.parameters(),'lr':self.config.TRAIN.BASE_LR},
             {'params':self.model.fingerHead.parameters(),'lr':self.config.TRAIN.BASE_LR}],lr=self.config.TRAIN.BASE_LR)
+        self.lr_scheduler = build_scheduler(self.config,self.optimizer,self.n_iter_per_epoch)
         self.model = nn.DataParallel(self.model,list(range(0,len(os.environ["CUDA_VISIBLE_DEVICES"].split(',')))))
         if self.config.TRAIN.CLS_LOSS=="focal":
             self.cls_criterion = FocalLoss(gamma=2.0).cuda()
@@ -126,9 +126,9 @@ class Trainer():
             avg_loss = self.train(epoch)
             eval_error = self.evaluate(epoch,"validation",self.evalloader)
             if epoch % 10==0:
-                save_model(self.model.module,self.optimizer,None,epoch,eval_error,os.path.join(self.config.TRAIN.SAVE_DIR,f'{epoch}.pth.tar'))
+                save_model(self.model.module,self.optimizer,None,epoch,eval_error,os.path.join(self.config.TRAIN.SAVE_DIR,self.prefix,f'{epoch}.pth.tar'))
             if eval_error<best_error:
-                save_model(self.model.module,self.optimizer,None,epoch,eval_error,os.path.join(self.config.TRAIN.SAVE_DIR,"best.pth.tar"))
+                save_model(self.model.module,self.optimizer,None,epoch,eval_error,os.path.join(self.config.TRAIN.SAVE_DIR,self.prefix,"best.pth.tar"))
                 best_error = eval_error
 
         self.evaluate(self.config.TRAIN.EPOCHS,"test",self.testloader)
@@ -212,6 +212,9 @@ class Trainer():
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()
+            self.lr_scheduler.step_update(epoch*self.n_iter_per_epoch+iterx)
+            # self.writer.add_scalar("train_lr", max(self.lr_scheduler.get_update_values(epoch*self.n_iter_per_epoch+iterx)), epoch*self.n_iter_per_epoch+iterx)
+            self.writer.add_scalar("train_lr", self.optimizer.param_groups[-1]['lr'], epoch*self.n_iter_per_epoch+iterx)
 
         self.writer.add_scalar("epoch_loss_all",loss_scalar.avg,epoch)
         self.writer.add_scalar("epoch_loss_cls",cls_loss_scalar.avg,epoch)
@@ -223,7 +226,7 @@ class Trainer():
     def evaluate(self,epoch,context,dataloader):
         if context=="test":
             print("testing====")
-            best_ckp = torch.load(os.path.join(self.config.TRAIN.SAVE_DIR,"best.pth.tar"),map_location=lambda storage,_:storage)
+            best_ckp = torch.load(os.path.join(self.config.TRAIN.SAVE_DIR,self.prefix,"best.pth.tar"),map_location=lambda storage,_:storage)
             self.model.module.load_state_dict(best_ckp["model"])
 
         self.model.eval()

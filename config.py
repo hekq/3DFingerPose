@@ -37,6 +37,7 @@ _C.DATA.NORMALIZATION = "0-1"
 # Model settings
 # -----------------------------------------------------------------------------
 _C.MODEL = CN()
+_C.MODEL.BACKBONE = "resnet18"
 _C.MODEL.NUM_CLASSES = [60,30,60]
 _C.MODEL.YAW_MAX = 90
 _C.MODEL.YAW_MIN = -90
@@ -60,7 +61,7 @@ _C.TRAIN = CN()
 _C.TRAIN.SAVE_DIR = "./models"
 _C.TRAIN.START_EPOCH = 0
 _C.TRAIN.EPOCHS = 300
-_C.TRAIN.WARMUP_EPOCHS = 5
+_C.TRAIN.WARMUP_EPOCHS = 1
 _C.TRAIN.WEIGHT_DECAY = 0.05
 _C.TRAIN.BASE_LR = 5e-4
 _C.TRAIN.WARMUP_LR = 5e-7
@@ -184,12 +185,12 @@ def update_config(config, args):
         config.merge_from_list(args.opts)
 
     # merge from specific arguments
-    if args.batch_size:
-        config.DATA.BATCH_SIZE = args.batch_size
-    if args.data_path:
-        config.DATA.DATA_PATH = args.data_path
-    if args.lr:
-        config.TRAIN.BASE_LR = args.lr
+    # if args.batch_size:
+    #     config.DATA.BATCH_SIZE = args.batch_size
+    # if args.data_path:
+    #     config.DATA.DATA_PATH = args.data_path
+    # if args.lr:
+    #     config.TRAIN.BASE_LR = args.lr
     config.freeze()
 
 
@@ -198,6 +199,7 @@ def get_config(args) -> CN:
     # Return a clone so that the defaults will not be altered
     # This is for the "local variable" use pattern
     config = _C.clone()
-    update_config(config, args)
+    if args:
+        update_config(config, args)
 
     return config

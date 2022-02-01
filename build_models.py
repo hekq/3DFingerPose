@@ -23,10 +23,10 @@ class modulate_block(nn.Sequential):
 
 
 class UltraModel(nn.Module):
-    def __init__(self,in_c,pose_c,finger_c,fcn_c=1):
+    def __init__(self,in_c,pose_c,finger_c,backbone='resnet18',fcn_c=1):
         super(UltraModel,self).__init__()
         self.base = smp.Unet(
-                encoder_name="resnet18",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+                encoder_name=backbone,        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
                 encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
                 in_channels=in_c,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
                 classes=fcn_c,                      # model output channels (number of classes in your dataset)
