@@ -1,4 +1,4 @@
-pkls
+*.pkl*
 images
 segmentations
 poses
