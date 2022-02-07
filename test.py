@@ -18,11 +18,21 @@ with open('./config.yaml','r') as f:
     config = CN(yaml.safe_load(f))
 
 model = UltraModel(1,config.MODEL.NUM_CLASSES,2,config.MODEL.BACKBONE).cuda()
+if not os.path.exists("./best.pth.tar"):
+    raise Exception("you should put the preprained model in the root directory")
 best_ckp = torch.load('./best.pth.tar',map_location=lambda storage,_:storage)
 model.load_state_dict(best_ckp["model"])
 model.eval()
 
-testset  = fingerset('./pkls/test.pkl', 'test', [64,64],2, config.DATA.NORMALIZATION)
+datasetset_pkl = './pkls/test.pkl'
+if "test" in datasetset_pkl:
+    set_type = "test"
+elif "eval" in datasetset_pkl:
+    set_type = "eval"
+else:
+    set_type = "train"
+
+testset = fingerset(datasetset_pkl, "test", [64,64],2, config.DATA.NORMALIZATION)
 dataloader = DataLoader(testset,128,False,num_workers=8)
 
 yaw_error_scalar = averageScalar()
@@ -37,7 +47,9 @@ idx_tensor_yaw = length_arange(config.MODEL.YAW_MIN,config.MODEL.YAW_MAX,config.
 idx_tensor_pitch = length_arange(config.MODEL.PITCH_MIN,config.MODEL.PITCH_MAX,config.MODEL.NUM_CLASSES[1]).cuda()
 idx_tensor_roll = length_arange(config.MODEL.ROLL_MIN,config.MODEL.ROLL_MAX,config.MODEL.NUM_CLASSES[2]).cuda()
 
-bad_predict = []
+
+predicts = []
+gts = []
 for iterx, item in enumerate(dataloader):
     with torch.no_grad():
         img = item["img"].cuda()
@@ -84,4 +96,24 @@ for iterx, item in enumerate(dataloader):
 
         print(f"Eval Evil: {iterx}/{len(dataloader)}|| ",string_for_loss(["yaw","pitch","roll","finger","seg"],
                                              [yaw_error,pitch_error,roll_error,finger_right,seg_dice]))
-print(f"Average eval error: yaw: {yaw_error_scalar.avg:4f},pitch: {pitch_error_scalar.avg:4f},roll: {roll_error_scalar.avg:4f}")
+        for k in range(bb):
+            gts.append([yaw_gt[k].item(),pitch_gt[k].item(),roll_gt[k].item()])
+            predicts.append([yaw_predict[k].item(),pitch_predict[k].item(),roll_predict[k].item()])
+# print(f"Average eval error: yaw: {yaw_error_scalar.avg:4f},pitch: {pitch_error_scalar.avg:4f},roll: {roll_error_scalar.avg:4f}")
+
+print(f"reporting performance on {set_type}")
+print("\t\t yaw\t\t pitch\t\t roll")
+predicts = np.array(predicts)
+gts = np.array(gts)
+
+mae = np.mean(np.abs(predicts-gts),axis = 0)
+mae_all = np.mean(np.abs(predicts-gts))
+print(f"MAE {mae[0]}\t {mae[1]}\t {mae[2]} {mae_all}(all)")
+
+rmse = np.sqrt(np.mean((predicts-gts)**2,axis=0))
+rmse_all = np.sqrt(np.mean((predicts-gts)**2))
+print(f"RMSE {rmse[0]}\t {rmse[1]}\t {rmse[2]} {rmse_all}(all)")
+
+sd = np.std(np.abs(predicts-gts),axis=0)
+sd_all = np.std(np.abs(predicts-gts))
+print(f"SD {sd[0]}\t {sd[1]}\t {sd[2]}\t {sd_all}(all)")
