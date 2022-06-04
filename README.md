@@ -54,9 +54,10 @@ python test.py
 MIT License
 
 ## Reference
-The paper is finalizing the review process for the Issue 4 of IMWUT Vol. 5 (December 2021)
-
-Research papers that used this database should cite the following paper: *coming soon*
+If you find our work useful in your research, please consider citing:
+```
+Ke He, Yongjie Duan, Jianjiang Feng, and Jie Zhou. 2022. Estimating 3D Finger Angle via Fingerprint Image. Proc. ACM Interact. Mob. Wearable Ubiquitous Technol. 6, 1, Article 14 (March 2022), 22 pages. https://doi.org/10.1145/3517243
+```
 
 ## Contact
 
