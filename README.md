@@ -61,4 +61,4 @@ Ke He, Yongjie Duan, Jianjiang Feng, and Jie Zhou. 2022. Estimating 3D Finger An
 
 ## Contact
 
-Contact Dr. [Jianjiang Feng](https://www.au.tsinghua.edu.cn/info/1078/1628.htm) for further information.
+Contact Dr. [Jianjiang Feng](https://www.au.tsinghua.edu.cn/info/1154/2008.htm) for further information.
